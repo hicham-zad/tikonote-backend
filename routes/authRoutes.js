@@ -7,6 +7,8 @@ const router = express.Router();
 // Public routes
 router.post('/signup', authController.signUpWithEmail);
 router.post('/signin', authController.signInWithEmail);
+router.post('/google', authController.signInWithGoogle);
+router.post('/apple', authController.signInWithApple);
 router.post('/oauth', authController.signInWithOAuth);
 router.post('/oauth/callback', authController.handleOAuthCallback);
 router.post('/refresh', authController.refreshToken);

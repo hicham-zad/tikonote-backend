@@ -5,6 +5,7 @@ import authRoutes from './routes/authRoutes.js';
 import topicRoutes from './routes/topicRoutes.js';
 import youtubeRoutes from './routes/youtubeRoutes.js';
 import pdfRoutes from './routes/pdfRoutes.js';
+import folderRoutes from './routes/folderRoutes.js';
 
 dotenv.config();
 
@@ -25,6 +26,7 @@ app.use((req, res, next) => {
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/youtube/', youtubeRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/folders', folderRoutes);
 app.use('/api', topicRoutes);
 
 

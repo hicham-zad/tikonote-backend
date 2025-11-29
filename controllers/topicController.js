@@ -3,11 +3,21 @@ import aiService from '../services/aiService.js';
 import supabase from '../config/supabase.js';
 import pdfService from '../services/pdfService.js';
 import { parseSummary } from '../utils/helpers.js';
+import { extractYouTubeTranscript } from '../services/youtubeService.js';
 
 // Create new topic and process it
 export const createTopic = async (req, res) => {
   try {
-    const { title, type, content, difficulty } = req.body;
+    const {
+      title,
+      type,
+      content,
+      difficulty,
+      includeFlashcards,
+      includeQuiz,
+      includeSummary,
+      includeMindMap
+    } = req.body;
     const userId = req.user.id;
 
     // Validate input
@@ -26,24 +36,41 @@ export const createTopic = async (req, res) => {
     }
 
     // For MVP, only support text
-    if (type !== 'text') {
-      return res.status(400).json({
-        error: `Type "${type}" not supported yet. Currently only "text" is supported.`,
-        supportedTypes: ['text'],
-        comingSoon: ['youtube', 'pdf', 'audio', 'image']
-      });
+    // if (type !== 'text') {
+    //   return res.status(400).json({
+    //     error: `Type "${type}" not supported yet. Currently only "text" is supported.`,
+    //     supportedTypes: ['text'],
+    //     comingSoon: ['youtube', 'pdf', 'audio', 'image']
+    //   });
+    // }
+
+    // Validate text length (only for text input)
+    if (type === 'text') {
+      if (content.length < 50) {
+        return res.status(400).json({
+          error: 'Text content must be at least 50 characters'
+        });
+      }
+
+      if (content.length > 10000) {
+        return res.status(400).json({
+          error: 'Content too long. Maximum 10,000 characters.'
+        });
+      }
     }
 
-    // Validate text length
-    if (content.length < 50) {
-      return res.status(400).json({
-        error: 'Content too short. Please provide at least 50 characters.'
-      });
-    }
+    // Check subscription limits
+    const subscriptionInfo = await supabaseService.getUserSubscriptionInfo(userId);
+    const { subscription_plan, topics_created_count } = subscriptionInfo;
 
-    if (content.length > 10000) {
-      return res.status(400).json({
-        error: 'Content too long. Maximum 10,000 characters.'
+    // Free plan: limit to 1 topic
+    if (subscription_plan === 'free' && topics_created_count >= 1) {
+      return res.status(403).json({
+        error: 'Topic limit reached',
+        message: 'You have reached the free plan limit of 1 topic. Please upgrade to create more topics.',
+        subscription_plan,
+        topics_created_count,
+        limit: 1
       });
     }
 
@@ -62,8 +89,22 @@ export const createTopic = async (req, res) => {
 
     console.log(`✅ Topic created with ID: ${topic.id}`);
 
+    // Increment topic creation counter
+    try {
+      await supabaseService.incrementTopicCount(userId);
+      console.log(`📊 Topic counter incremented for user ${userId}`);
+    } catch (counterError) {
+      console.error('⚠️ Failed to increment topic counter:', counterError);
+      // Don't fail the request if counter increment fails
+    }
+
     // 2. Process content asynchronously (don't await)
-    processContent(topic.id, content, type, difficulty || 'medium', userId);
+    processContent(topic.id, content, type, difficulty || 'medium', userId, {
+      includeFlashcards,
+      includeQuiz,
+      includeSummary,
+      includeMindMap
+    });
 
     // 3. Return immediately
     res.status(201).json({
@@ -97,9 +138,20 @@ export const getTopic = async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
+    // Transform to match frontend expected shape
+    const formattedTopic = {
+      ...topic,
+      generationProgress: typeof topic.progress === 'number' ? topic.progress : 0,
+      progress: topic.studyProgress || {
+        flashcardsReviewed: 0,
+        quizScore: 0,
+        lastScore: 0
+      }
+    };
+
     res.json({
       success: true,
-      topic
+      topic: formattedTopic
     });
 
   } catch (error) {
@@ -113,13 +165,26 @@ export const getUserTopics = async (req, res) => {
   try {
     const userId = req.user.id;
     const limit = parseInt(req.query.limit) || 20;
+    const filter = req.query.filter || 'recent'; // recent, week, month
 
-    const topics = await supabaseService.getUserTopics(userId, limit);
+    console.log(`🔍 Controller received filter: "${filter}" for user ${userId}`);
+
+    const topics = await supabaseService.getUserTopics(userId, limit, filter);
+
+    const formattedTopics = topics.map(topic => ({
+      ...topic,
+      generationProgress: typeof topic.progress === 'number' ? topic.progress : 0,
+      progress: topic.studyProgress || {
+        flashcardsReviewed: 0,
+        quizScore: 0,
+        lastScore: 0
+      }
+    }));
 
     res.json({
       success: true,
-      count: topics.length,
-      topics
+      count: formattedTopics.length,
+      topics: formattedTopics
     });
 
   } catch (error) {
@@ -210,7 +275,7 @@ export const removeDeviceToken = async (req, res) => {
 };
 
 // Background processing function
-async function processContent(topicId, content, type, difficulty, userId) {
+async function processContent(topicId, content, type, difficulty, userId, options = {}) {
   try {
     console.log(`🔄 Processing topic ${topicId}...`);
 
@@ -222,6 +287,25 @@ async function processContent(topicId, content, type, difficulty, userId) {
     // For other types, we'll extract text first (Week 2-4)
     let text = content;
 
+    if (type === 'youtube') {
+      try {
+        console.log(`🎥 Extracting transcript from YouTube URL: ${content}`);
+        const transcriptData = await extractYouTubeTranscript(content);
+        text = transcriptData.text;
+
+        // Update topic title with video title
+        if (transcriptData.title) {
+          console.log(`📝 Updating topic title to: ${transcriptData.title}`);
+          await supabaseService.updateTopicTitle(topicId, transcriptData.title);
+        }
+
+        console.log(`✅ Transcript extracted: ${text.length} chars`);
+      } catch (error) {
+        console.error('❌ YouTube extraction failed:', error);
+        throw new Error('Failed to extract YouTube transcript. Video might be private or have no captions.');
+      }
+    }
+
     await supabaseService.updateProgress(topicId, 30);
 
     console.log(`📝 Text length: ${text.length} characters`);
@@ -230,7 +314,13 @@ async function processContent(topicId, content, type, difficulty, userId) {
     console.log(`🤖 Sending to AI...`);
     await supabaseService.updateProgress(topicId, 50);
 
-    const processedContent = await aiService.generateContent(text, difficulty);
+    const processedContent = await aiService.generateContent(text, difficulty, options);
+
+    // Update title with AI-generated title for text inputs (better than "Custom Text")
+    if (type === 'text' && processedContent.title) {
+      console.log(`📝 Updating topic title to AI title: ${processedContent.title}`);
+      await supabaseService.updateTopicTitle(topicId, processedContent.title);
+    }
 
     await supabaseService.updateProgress(topicId, 90);
 

@@ -1,39 +1,194 @@
 import supabase from '../config/supabase.js';
 
+// Helper function to map Supabase errors to user-friendly messages
+const mapAuthErrorToUserMessage = (error) => {
+  const errorMessage = error.message || '';
+  const errorCode = error.code;
+
+  // Check for common Supabase error patterns
+  if (errorMessage.includes('User already registered') || errorCode === '23505') {
+    return 'This email is already registered. Please log in instead.';
+  }
+
+  if (errorMessage.includes('Password should be at least') || errorMessage.includes('password')) {
+    return 'Password must be at least 6 characters long.';
+  }
+
+  if (errorMessage.includes('Invalid email') || errorMessage.includes('email')) {
+    return 'Please enter a valid email address.';
+  }
+
+  if (errorMessage.includes('Network') || errorMessage.includes('connection')) {
+    return 'Network error. Please check your connection and try again.';
+  }
+
+  if (errorMessage.includes('rate limit')) {
+    return 'Too many attempts. Please try again in a few minutes.';
+  }
+
+  // For database or server errors, provide a generic message
+  if (errorCode && errorCode.startsWith('5')) {
+    return 'Server error. Please try again later.';
+  }
+
+  // Default fallback message
+  return 'Unable to create account. Please try again.';
+};
+
 // Sign up with email
 export const signUpWithEmail = async (req, res) => {
   try {
     const { email, password, fullName } = req.body;
 
+    console.log('📝 Signup request received for:', email);
+
     if (!email || !password) {
-      return res.status(400).json({ 
-        error: 'Email and password required' 
+      return res.status(400).json({
+        error: 'Email and password are required'
       });
     }
 
-    // Sign up user
-    const { data, error } = await supabase.auth.signUp({
+    // Use admin API to create user with email already confirmed
+    // This bypasses email confirmation requirement
+    const { data: adminData, error: adminError } = await supabase.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: {
-          full_name: fullName || '',
-          auth_provider: 'email'
-        }
+      email_confirm: true, // Auto-confirm email
+      user_metadata: {
+        full_name: fullName || '',
+        auth_provider: 'email'
       }
     });
 
-    if (error) throw error;
+    if (adminError) throw adminError;
+
+    console.log('✅ User created with admin API:', adminData.user.id);
+
+    // Now sign in the user to get a session
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (signInError) {
+      console.error('❌ Auto-login failed after user creation:', signInError);
+      throw new Error('Account created but login failed. Please try logging in manually.');
+    }
+
+    console.log('✅ Auto-login successful, session retrieved.');
+
+    console.log('📦 Supabase signup response:', {
+      hasUser: !!signInData?.user,
+      hasSession: !!signInData?.session,
+      userId: signInData?.user?.id,
+      sessionKeys: signInData?.session ? Object.keys(signInData.session) : []
+    });
 
     res.status(201).json({
       success: true,
       message: 'User created successfully',
+      user: signInData.user,
+      session: signInData.session
+    });
+
+  } catch (error) {
+    console.error('❌ Sign up error:', error);
+    const userFriendlyMessage = mapAuthErrorToUserMessage(error);
+    res.status(400).json({ error: userFriendlyMessage });
+  }
+};
+
+// Sign in with Apple ID Token
+export const signInWithApple = async (req, res) => {
+  try {
+    const { identityToken, fullName } = req.body;
+
+    console.log('🍎 [Backend] Apple Sign-In Request Received');
+    console.log('🍎 [Backend] Identity Token (First 50 chars):', identityToken ? identityToken.substring(0, 50) + '...' : 'MISSING');
+    console.log('🍎 [Backend] Full Name:', fullName);
+
+    if (!identityToken) {
+      console.error('🍎 [Backend] Error: Identity token missing');
+      return res.status(400).json({ error: 'Identity token required' });
+    }
+
+    console.log('🍎 [Backend] Calling Supabase signInWithIdToken...');
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: identityToken,
+    });
+
+    if (error) {
+      console.error('🍎 [Backend] Supabase Auth Error:', error);
+      console.error('🍎 [Backend] Error Message:', error.message);
+      throw error;
+    }
+
+    console.log('🍎 [Backend] Supabase Auth Success');
+    console.log('🍎 [Backend] User ID:', data.user?.id);
+
+    // Update profile if fullName is provided (first login usually)
+    if (data.user) {
+      const updates = { last_login_at: new Date().toISOString() };
+
+      if (fullName && (!data.user.user_metadata?.full_name)) {
+        updates.full_name = fullName;
+        // Also update Supabase user metadata
+        await supabase.auth.updateUser({
+          data: { full_name: fullName }
+        });
+      }
+
+      await supabase
+        .from('user_profiles')
+        .update(updates)
+        .eq('id', data.user.id);
+    }
+
+    res.json({
+      success: true,
       user: data.user,
       session: data.session
     });
 
   } catch (error) {
-    console.error('Sign up error:', error);
+    console.error('🍎 [Backend] Apple sign in error (Catch Block):', error);
+    res.status(400).json({ error: error.message, details: error });
+  }
+};
+
+// Sign in with Google ID Token
+export const signInWithGoogle = async (req, res) => {
+  try {
+    const { idToken } = req.body;
+
+    if (!idToken) {
+      return res.status(400).json({ error: 'ID token required' });
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'google',
+      token: idToken,
+    });
+
+    if (error) throw error;
+
+    // Update last login
+    if (data.user) {
+      await supabase
+        .from('user_profiles')
+        .update({ last_login_at: new Date().toISOString() })
+        .eq('id', data.user.id);
+    }
+
+    res.json({
+      success: true,
+      user: data.user,
+      session: data.session
+    });
+
+  } catch (error) {
+    console.error('Google sign in error:', error);
     res.status(400).json({ error: error.message });
   }
 };
@@ -44,8 +199,8 @@ export const signInWithEmail = async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ 
-        error: 'Email and password required' 
+      return res.status(400).json({
+        error: 'Email and password required'
       });
     }
 
@@ -80,8 +235,8 @@ export const signInWithOAuth = async (req, res) => {
     const { provider } = req.body; // 'google' or 'apple'
 
     if (!['google', 'apple'].includes(provider)) {
-      return res.status(400).json({ 
-        error: 'Invalid provider. Use "google" or "apple"' 
+      return res.status(400).json({
+        error: 'Invalid provider. Use "google" or "apple"'
       });
     }
 
@@ -142,9 +297,9 @@ export const signOut = async (req, res) => {
 
     if (error) throw error;
 
-    res.json({ 
-      success: true, 
-      message: 'Signed out successfully' 
+    res.json({
+      success: true,
+      message: 'Signed out successfully'
     });
 
   } catch (error) {
@@ -169,7 +324,7 @@ export const getCurrentUser = async (req, res) => {
     // If profile doesn't exist, create it
     if (!profile) {
       console.log('Profile not found, creating...');
-      
+
       const { data: newProfile, error: createError } = await supabase
         .from('user_profiles')
         .insert({
@@ -234,12 +389,12 @@ export const getCurrentUser = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { 
-      fullName, 
-      avatarUrl, 
+    const {
+      fullName,
+      avatarUrl,
       preferredDifficulty,
       notificationEnabled,
-      theme 
+      theme
     } = req.body;
 
     const updates = {
@@ -275,22 +430,61 @@ export const updateProfile = async (req, res) => {
 
 // Delete account
 export const deleteAccount = async (req, res) => {
+  console.log('🔴 DELETE ACCOUNT ENDPOINT CALLED');
+  console.log('User ID:', req.user?.id);
+
   try {
     const userId = req.user.id;
 
-    // This will cascade delete user_profiles and topics due to foreign keys
-    const { error } = await supabase.auth.admin.deleteUser(userId);
+    console.log(`Starting account deletion for user: ${userId}`);
 
-    if (error) throw error;
+    // Step 1: Delete all topics (this will cascade delete flashcards, quizzes, summaries, mind maps)
+    const { error: topicsError } = await supabase
+      .from('topics')
+      .delete()
+      .eq('userId', userId);
+
+    if (topicsError) {
+      console.error('Error deleting topics:', topicsError);
+      throw new Error('Failed to delete user topics');
+    }
+
+    console.log('Topics deleted successfully');
+
+    // Step 2: Delete user profile
+    const { error: profileError } = await supabase
+      .from('user_profiles')
+      .delete()
+      .eq('id', userId);
+
+    if (profileError) {
+      console.error('Error deleting profile:', profileError);
+      throw new Error('Failed to delete user profile');
+    }
+
+    console.log('User profile deleted successfully');
+
+    // Step 3: Delete the auth user (this is the final step)
+    const { error: authError } = await supabase.auth.admin.deleteUser(userId);
+
+    if (authError) {
+      console.error('Error deleting auth user:', authError);
+      throw new Error('Failed to delete authentication account');
+    }
+
+    console.log('Auth user deleted successfully');
 
     res.json({
       success: true,
-      message: 'Account deleted successfully'
+      message: 'Account and all associated data deleted successfully'
     });
 
   } catch (error) {
     console.error('Delete account error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({
+      error: error.message || 'Failed to delete account',
+      details: 'Please contact support if the problem persists'
+    });
   }
 };
 
