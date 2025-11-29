@@ -21,8 +21,12 @@ export const extractContent = async (req, res) => {
         // Extract text
         const text = await pdfService.extractTextFromBuffer(req.file.buffer);
 
-        if (!text || text.trim().length === 0) {
-            return res.status(400).json({ error: 'Could not extract text from PDF. The file might be empty or scanned image.' });
+        // Check for insufficient text (e.g. scanned images)
+        if (!text || text.trim().length < 100) {
+            return res.status(400).json({
+                error: 'Insufficient text content',
+                message: 'The PDF appears to be a scanned image or has very little text. Please use a text-based PDF or a document with more content.'
+            });
         }
 
         res.json({
