@@ -89,7 +89,11 @@ ${sectionIndex++}. SUMMARY:
 
     if (includeQuiz) {
       promptInstructions += `
-${sectionIndex++}. QUIZ: 6-10 multiple choice questions (adapt quantity to content length: 6 for short, up to 10 for detailed content)
+${sectionIndex++}. QUIZ: Generate EXACTLY 10 multiple choice questions (minimum 7, never less)
+   - CRITICAL: You MUST generate at least 7 questions, ideally 10
+   - Each question must have 4 options
+   - Vary difficulty across questions
+   - Include detailed explanations for correct answers
 `;
       jsonStructure.quiz = [{
         question: "?",
@@ -101,7 +105,10 @@ ${sectionIndex++}. QUIZ: 6-10 multiple choice questions (adapt quantity to conte
 
     if (includeFlashcards) {
       promptInstructions += `
-${sectionIndex++}. FLASHCARDS: 6-10 cards (adapt quantity to content length: 6 for short, up to 10 for detailed content)
+${sectionIndex++}. FLASHCARDS: Generate EXACTLY 10 flashcards (minimum 7, never less)
+   - CRITICAL: You MUST generate at least 7 flashcards, ideally 10
+   - Each card should have a clear question and concise answer
+   - Cover different aspects of the content
 `;
       jsonStructure.flashcards = [{ question: "Q", answer: "A" }];
     }

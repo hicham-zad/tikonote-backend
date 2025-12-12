@@ -11,6 +11,8 @@
   "keywords": [],
   "homepage": "https://github.com/abjabja/QuickStart-MERN-back-end#readme",
   "dependencies": {
+    "@danielxceron/youtube-transcript": "^1.2.3",
+    "@distube/ytdl-core": "^4.16.12",
     "@supabase/supabase-js": "^2.80.0",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
@@ -33,7 +35,6 @@
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.29.1",
     "validator": "^13.7.0",
-    "youtube-transcript": "^1.2.1",
     "youtubei.js": "^16.0.1"
   },
   "devDependencies": {
