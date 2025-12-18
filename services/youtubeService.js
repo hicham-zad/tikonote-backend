@@ -1,122 +1,50 @@
-import { google } from 'googleapis';
-import axios from 'axios';
+import { getSubtitles, getVideoDetails } from 'youtube-caption-extractor';
 
 export const extractYouTubeTranscript = async (url) => {
   const videoId = extractVideoId(url);
-  const apiKey = process.env.YOUTUBE_API_KEY;
-
-  if (!apiKey) {
-    throw new Error('YOUTUBE_API_KEY is not configured. Please add it to your environment variables.');
-  }
-
   console.log(`🎥 Extracting transcript for video ID: ${videoId}`);
-  console.log(`🔑 Using YouTube Data API v3`);
-
-  const youtube = google.youtube({ version: 'v3', auth: apiKey });
+  console.log(`⚡️ Using youtube-caption-extractor`);
 
   try {
-    // Step 1: Get video details
-    const videoResponse = await youtube.videos.list({
-      part: ['snippet', 'contentDetails'],
-      id: [videoId],
-    });
+    // Attempt to get video details including subtitles
+    const videoDetails = await getVideoDetails({ videoID: videoId, lang: 'en' });
 
-    if (!videoResponse.data.items || videoResponse.data.items.length === 0) {
-      throw new Error('Video not found');
+    console.log(`📺 Video: ${videoDetails.title}`);
+
+    if (videoDetails.subtitles && videoDetails.subtitles.length > 0) {
+      const text = videoDetails.subtitles
+        .map(s => s.text)
+        .join(' ');
+
+      console.log(`✅ Successfully extracted transcript (${text.length} characters)`);
+
+      return {
+        text,
+        title: videoDetails.title,
+        duration: null, // This library doesn't return total duration easily
+        videoId,
+      };
     }
 
-    const video = videoResponse.data.items[0];
-    const videoTitle = video.snippet.title;
-    const duration = video.contentDetails.duration;
+    // Fallback: Try getting just subtitles if details failed to have them
+    const subtitles = await getSubtitles({ videoID: videoId, lang: 'en' });
 
-    console.log(`📺 Video: ${videoTitle}`);
+    if (subtitles && subtitles.length > 0) {
+      const text = subtitles.map(s => s.text).join(' ');
+      console.log(`✅ Successfully extracted subtitles only (${text.length} characters)`);
 
-    // Step 2: Get caption tracks
-    const captionsResponse = await youtube.captions.list({
-      part: ['snippet'],
-      videoId: videoId,
-    });
-
-    const captions = captionsResponse.data.items;
-    if (!captions || captions.length === 0) {
-      throw new Error('This video has no captions available. Please try another video.');
+      return {
+        text,
+        title: videoDetails.title || `YouTube Video ${videoId}`,
+        duration: null,
+        videoId
+      };
     }
 
-    // Prefer English, otherwise take first available
-    const englishCaption = captions.find(c => c.snippet?.language === 'en');
-    const caption = englishCaption || captions[0];
-    const lang = caption.snippet?.language || 'en';
-
-    console.log(`📝 Found caption track: ${caption.snippet?.name || lang}`);
-
-    // Step 3: Use timedtext API (works for auto-generated captions without OAuth)
-    const timedTextUrl = `https://www.youtube.com/api/timedtext?v=${videoId}&lang=${lang}&fmt=srv3`;
-
-    console.log('🔄 Fetching transcript via timedtext API...');
-
-    const response = await axios.get(timedTextUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-        'Accept-Language': 'en-US,en;q=0.9',
-      },
-      timeout: 10000,
-    });
-
-    if (!response.data) {
-      throw new Error('No transcript data received');
-    }
-
-    // Parse XML transcript
-    let xmlData = response.data;
-    if (typeof xmlData !== 'string') {
-      xmlData = String(xmlData);
-    }
-
-    const matches = [...xmlData.matchAll(/<text[^>]*>(.*?)<\/text>/g)];
-
-    if (matches.length === 0) {
-      throw new Error('No text segments found in transcript');
-    }
-
-    const text = matches.map(m => {
-      return m[1]
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/&quot;/g, '"')
-        .replace(/&#39;/g, "'")
-        .replace(/\n/g, ' ');
-    }).join(' ').trim();
-
-    if (text.length === 0) {
-      throw new Error('Transcript is empty');
-    }
-
-    console.log(`✅ Successfully extracted transcript (${text.length} characters)`);
-
-    return {
-      text,
-      title: videoTitle,
-      duration: duration,
-      videoId,
-    };
+    throw new Error('No subtitles found for this video');
 
   } catch (error) {
     console.error('❌ Transcript extraction failed:', error.message);
-
-    // Provide helpful error messages
-    if (error.message.includes('API key')) {
-      throw new Error('YouTube API key is invalid or missing. Please check your YOUTUBE_API_KEY environment variable.');
-    }
-
-    if (error.message.includes('quota')) {
-      throw new Error('YouTube API quota exceeded. Please try again later or upgrade your API quota.');
-    }
-
-    if (error.message.includes('no captions')) {
-      throw new Error('This video has no captions available. Please try another video with captions enabled.');
-    }
-
     throw new Error(`Unable to extract transcript: ${error.message}`);
   }
 };
