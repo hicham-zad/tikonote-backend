@@ -11,8 +11,6 @@
   "keywords": [],
   "homepage": "https://github.com/abjabja/QuickStart-MERN-back-end#readme",
   "dependencies": {
-    "@danielxceron/youtube-transcript": "^1.2.3",
-    "@distube/ytdl-core": "^4.16.12",
     "@supabase/supabase-js": "^2.80.0",
     "axios": "^1.12.2",
     "bcryptjs": "^2.4.3",
@@ -25,7 +23,6 @@
     "google-auth-library": "^9.15.1",
     "googleapis": "^144.0.0",
     "http-status-codes": "^2.2.0",
-    "https-proxy-agent": "^7.0.4",
     "jsonwebtoken": "^9.0.2",
     "jspdf": "^3.0.3",
     "mammoth": "^1.11.0",
@@ -37,8 +34,7 @@
     "pdf-parse": "^1.1.1",
     "pdfkit": "^0.17.2",
     "puppeteer": "^24.29.1",
-    "validator": "^13.7.0",
-    "youtubei.js": "^12.2.0"
+    "validator": "^13.7.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.9"
