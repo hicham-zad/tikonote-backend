@@ -1,5 +1,5 @@
 import express from 'express';
-import { getTranscript } from '../controllers/youtubeController.js';
+import { getTranscript, checkVideo } from '../controllers/youtubeController.js';
 import * as youtubeContentController from '../controllers/youtubeContentController.js';
 import * as youtubeValidationController from '../controllers/youtubeValidationController.js';
 import { authenticateUser } from '../middleware/supabaseAuth.js';
@@ -14,6 +14,10 @@ const router = express.Router();
 // ============================================
 // NEW CLIENT-SIDE EXTRACTION ENDPOINTS
 // ============================================
+
+// Pre-flight check: Check video availability and caption status before extraction
+// GET /api/youtube/check/:videoId  OR  GET /api/youtube/check?url=...
+router.get('/check/:videoId?', youtubeValidateLimiter, checkVideo);
 
 // Validate YouTube URL and get video ID (no auth required for validation)
 // POST /api/youtube/validate
