@@ -5,13 +5,42 @@ export const handleRevenueCatWebhook = async (req, res) => {
         const { event } = req.body;
         const authHeader = req.headers.authorization;
 
-        // Log the full payload for debugging
-        console.log('📦 Full webhook payload:', JSON.stringify(req.body, null, 2));
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('🔔 WEBHOOK REQUEST RECEIVED');
+        console.log('═══════════════════════════════════════════════════════');
+        console.log('📦 Headers:', JSON.stringify(req.headers, null, 2));
+        console.log('📦 Body:', JSON.stringify(req.body, null, 2));
 
         // Verify webhook authorization
-        const expectedSecret = `Bearer ${process.env.REVENUECAT_WEBHOOK_SECRET}`;
+        const webhookSecret = process.env.REVENUECAT_WEBHOOK_SECRET;
+
+        if (!webhookSecret) {
+            console.error('❌ CRITICAL: REVENUECAT_WEBHOOK_SECRET is not set in environment variables!');
+            console.error('   Please add this to your .env file or hosting platform (Render, etc.)');
+            console.error('   Get the secret from: RevenueCat Dashboard → Integrations → Webhooks');
+            return res.status(500).json({ error: 'Server configuration error' });
+        }
+
+        const expectedSecret = `Bearer ${webhookSecret}`;
+
+        console.log('🔐 Authorization Check:');
+        console.log(`   Expected: ${expectedSecret.substring(0, 20)}...`);
+        console.log(`   Received: ${authHeader ? authHeader.substring(0, 20) + '...' : 'NONE'}`);
+        console.log(`   Match: ${authHeader === expectedSecret ? '✅ YES' : '❌ NO'}`);
+
         if (authHeader !== expectedSecret) {
-            console.error('❌ Unauthorized webhook request. Expected:', expectedSecret, 'Got:', authHeader);
+            console.error('❌ UNAUTHORIZED WEBHOOK REQUEST');
+            console.error('═══════════════════════════════════════════════════════');
+            console.error('Expected format: Bearer sk_xxxxx');
+            console.error(`Expected length: ${expectedSecret.length}`);
+            console.error(`Received length: ${authHeader ? authHeader.length : 0}`);
+            console.error('');
+            console.error('TO FIX:');
+            console.error('1. Go to RevenueCat Dashboard → Integrations → Webhooks');
+            console.error('2. Copy the Authorization header value');
+            console.error('3. Set REVENUECAT_WEBHOOK_SECRET=<value> (without "Bearer " prefix)');
+            console.error('4. Restart your server');
+            console.error('═══════════════════════════════════════════════════════');
             return res.status(401).json({ error: 'Unauthorized' });
         }
         console.log('✅ Webhook authorization verified');

@@ -320,26 +320,35 @@ async function processContent(topicId, content, type, difficulty, userId, option
 
     if (type === 'youtube') {
       try {
-        console.log(`🎥 Extracting transcript from YouTube URL: ${content}`);
-        const transcriptData = await extractYouTubeTranscript(content);
-        text = transcriptData.text;
+        // Check if content is a URL
+        const isUrl = content.trim().startsWith('http') || content.trim().startsWith('www.') || content.trim().startsWith('youtube.com') || content.trim().startsWith('youtu.be');
 
-        // Update topic title with video title
-        if (transcriptData.title) {
-          let videoTitle = transcriptData.title;
-          let counter = 1;
+        if (isUrl) {
+          console.log(`🎥 Extracting transcript from YouTube URL: ${content}`);
+          const transcriptData = await extractYouTubeTranscript(content);
+          text = transcriptData.text;
 
-          // Ensure unique title
-          while (await supabaseService.checkTopicExists(userId, videoTitle)) {
-            videoTitle = `${transcriptData.title} (${counter})`;
-            counter++;
+          // Update topic title with video title
+          if (transcriptData.title) {
+            let videoTitle = transcriptData.title;
+            let counter = 1;
+
+            // Ensure unique title
+            while (await supabaseService.checkTopicExists(userId, videoTitle)) {
+              videoTitle = `${transcriptData.title} (${counter})`;
+              counter++;
+            }
+
+            console.log(`📝 Updating topic title to: ${videoTitle}`);
+            await supabaseService.updateTopicTitle(topicId, videoTitle);
           }
 
-          console.log(`📝 Updating topic title to: ${videoTitle}`);
-          await supabaseService.updateTopicTitle(topicId, videoTitle);
+          console.log(`✅ Transcript extracted: ${text.length} chars`);
+        } else {
+          // Content is already the transcript
+          console.log(`🎥 Using provided transcript directly (${content.length} chars).`);
+          text = content;
         }
-
-        console.log(`✅ Transcript extracted: ${text.length} chars`);
       } catch (error) {
         console.error('❌ YouTube extraction failed:', error);
         throw new Error('Failed to extract YouTube transcript. Video might be private or have no captions.');
