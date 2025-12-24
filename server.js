@@ -8,6 +8,7 @@ import pdfRoutes from './routes/pdfRoutes.js';
 import folderRoutes from './routes/folderRoutes.js';
 import webhookRoutes from './routes/webhookRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import stripeRoutes from './routes/stripeRoutes.js';
 
 dotenv.config();
 
@@ -61,6 +62,11 @@ const corsOptions = {
 
 // Middleware
 app.use(cors(corsOptions));
+
+// Stripe webhook needs raw body for signature verification
+app.use('/api/stripe/webhook', express.raw({ type: 'application/json' }));
+
+// Regular JSON parsing for other routes
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -72,6 +78,7 @@ app.use((req, res, next) => {
 
 // Routes
 app.use('/api/webhooks', webhookRoutes);
+app.use('/api/stripe', stripeRoutes);
 app.use('/api/pdf', pdfRoutes);
 app.use('/api/youtube/', youtubeRoutes);
 app.use('/api/auth', authRoutes);

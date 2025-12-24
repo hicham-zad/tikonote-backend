@@ -67,14 +67,14 @@ export const createTopic = async (req, res) => {
     const subscriptionInfo = await supabaseService.getUserSubscriptionInfo(userId);
     const { subscription_plan, topics_created_count } = subscriptionInfo;
 
-    // Free plan: limit to 1 topic
-    if (subscription_plan === 'free' && topics_created_count >= 1) {
+    // Free plan: limit to 2 topics
+    if (subscription_plan === 'free' && topics_created_count >= 2) {
       return res.status(403).json({
         error: 'Topic limit reached',
-        message: 'You have reached the free plan limit of 1 topic. Please upgrade to create more topics.',
+        message: 'You have reached the free plan limit of 2 topics. Please upgrade to create more topics.',
         subscription_plan,
         topics_created_count,
-        limit: 1
+        limit: 2
       });
     }
 

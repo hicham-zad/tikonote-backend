@@ -176,6 +176,36 @@ ${JSON.stringify(jsonStructure, null, 2)}
       content.summary = cleanText(content.summary);
     }
 
+    // Shuffle quiz options to randomize correct answer position
+    if (content.quiz && Array.isArray(content.quiz)) {
+      content.quiz = content.quiz.map(q => {
+        if (!q.options || q.options.length !== 4) return q;
+
+        // Get the correct answer text before shuffling
+        const correctAnswerText = q.options[q.correctAnswer];
+
+        // Create array of indices and shuffle them
+        const indices = [0, 1, 2, 3];
+        for (let i = indices.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [indices[i], indices[j]] = [indices[j], indices[i]];
+        }
+
+        // Reorder options based on shuffled indices
+        const shuffledOptions = indices.map(i => q.options[i]);
+
+        // Find new position of correct answer
+        const newCorrectIndex = shuffledOptions.indexOf(correctAnswerText);
+
+        return {
+          ...q,
+          options: shuffledOptions,
+          correctAnswer: newCorrectIndex
+        };
+      });
+      console.log('   ✅ Quiz options shuffled for randomized answer positions');
+    }
+
     console.log('✅ Content generated!');
     console.log(`   Title: ${content.title}`);
     if (content.summary) console.log(`   Summary Length: ${content.summary.length} chars`);

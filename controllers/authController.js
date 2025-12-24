@@ -1,5 +1,6 @@
 import supabase from '../config/supabase.js';
 import axios from 'axios';
+import supabaseService from '../services/supabaseService.js';
 
 // Helper function to map Supabase errors to user-friendly messages
 const mapAuthErrorToUserMessage = (error) => {
@@ -326,10 +327,23 @@ export const getCurrentUser = async (req, res) => {
       });
     }
 
+    // Get subscription info
+    const subscriptionInfo = await supabaseService.getUserSubscriptionInfo(userId);
+
+    // Enrich profile with subscription data
+    const enrichedProfile = {
+      ...profile,
+      subscription_plan: subscriptionInfo.subscription_plan,
+      subscription_status: subscriptionInfo.subscription_status,
+      subscription_plan_type: subscriptionInfo.subscription_plan_type,
+      topics_created_count: subscriptionInfo.topics_created_count,
+      topics_limit: subscriptionInfo.subscription_plan === 'free' ? 2 : null
+    };
+
     res.json({
       success: true,
       user: req.user,
-      profile
+      profile: enrichedProfile
     });
 
   } catch (error) {

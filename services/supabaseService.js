@@ -293,16 +293,22 @@ export const incrementTopicCount = async (userId) => {
 };
 
 // Update user's subscription plan
-export const updateSubscriptionPlan = async (userId, plan, status = 'active', revenuecatCustomerId = null, productId = null, planType = null) => {
+export const updateSubscriptionPlan = async (userId, plan, status = 'active', revenuecatCustomerId = null, productId = null, planType = null, subscriptionSource = null, expiresAt = null) => {
   console.log(`📝 Attempting to update subscription for user: ${userId} to plan: ${plan}, status: ${status}`);
   if (revenuecatCustomerId) {
-    console.log(`🔗 Storing RevenueCat Customer ID: ${revenuecatCustomerId}`);
+    console.log(`🔗 Storing RevenueCat/Stripe Customer ID: ${revenuecatCustomerId}`);
   }
   if (productId) {
     console.log(`📦 Storing Product ID: ${productId}`);
   }
   if (planType) {
     console.log(`📅 Storing Plan Type: ${planType}`);
+  }
+  if (subscriptionSource) {
+    console.log(`🔄 Storing Subscription Source: ${subscriptionSource}`);
+  }
+  if (expiresAt) {
+    console.log(`⏰ Storing Expiration Date: ${expiresAt}`);
   }
 
   // Prepare update data
@@ -312,7 +318,7 @@ export const updateSubscriptionPlan = async (userId, plan, status = 'active', re
     updated_at: new Date().toISOString()
   };
 
-  // Add RevenueCat customer ID if provided
+  // Add RevenueCat customer ID or Stripe subscription ID if provided
   if (revenuecatCustomerId) {
     updateData.revenuecat_customer_id = revenuecatCustomerId;
   }
@@ -325,6 +331,16 @@ export const updateSubscriptionPlan = async (userId, plan, status = 'active', re
   // Add plan type if provided
   if (planType) {
     updateData.subscription_plan_type = planType;
+  }
+
+  // Add subscription source if provided (stripe or revenuecat)
+  if (subscriptionSource) {
+    updateData.subscription_source = subscriptionSource;
+  }
+
+  // Add expiration date if provided
+  if (expiresAt) {
+    updateData.expires_at = expiresAt;
   }
 
   // Try to update existing profile
@@ -342,7 +358,7 @@ export const updateSubscriptionPlan = async (userId, plan, status = 'active', re
 
   // If profile exists and was updated
   if (data) {
-    console.log('✅ Subscription updated successfully for user:', userId, 'New plan:', data.subscription_plan, 'Status:', data.subscription_status, 'Type:', data.subscription_plan_type);
+    console.log('✅ Subscription updated successfully for user:', userId, 'New plan:', data.subscription_plan, 'Status:', data.subscription_status, 'Type:', data.subscription_plan_type, 'Source:', data.subscription_source);
     return data;
   }
 
@@ -373,7 +389,7 @@ export const updateSubscriptionPlan = async (userId, plan, status = 'active', re
     last_login_at: new Date().toISOString()
   };
 
-  // Add RevenueCat customer ID if provided
+  // Add RevenueCat customer ID or Stripe subscription ID if provided
   if (revenuecatCustomerId) {
     newProfileData.revenuecat_customer_id = revenuecatCustomerId;
   }
@@ -386,6 +402,16 @@ export const updateSubscriptionPlan = async (userId, plan, status = 'active', re
   // Add plan type if provided
   if (planType) {
     newProfileData.subscription_plan_type = planType;
+  }
+
+  // Add subscription source if provided
+  if (subscriptionSource) {
+    newProfileData.subscription_source = subscriptionSource;
+  }
+
+  // Add expiration date if provided
+  if (expiresAt) {
+    newProfileData.expires_at = expiresAt;
   }
 
   const { data: newProfile, error: createError } = await supabase
