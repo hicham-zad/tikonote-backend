@@ -14,12 +14,13 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
  */
 export const createCheckoutSession = async (priceId, userId, customerId, successUrl, cancelUrl) => {
     try {
-        // Map price IDs to their corresponding Stripe coupon IDs
-        // These coupons are already configured in Stripe Dashboard
+        // Map price IDs to their corresponding Stripe coupon IDs from env vars
+        // DEV: V8VNiscQ, vZSCz2zN, n8MirGtZ
+        // PROD: Ad1rQ88W, ZrjR8N94, 1J07sEU2
         const priceToCouponMap = {
-            [process.env.STRIPE_PRICE_WEEKLY]: 'V8VNiscQ', // Weekly Plan Discount - 30% off once
-            [process.env.STRIPE_PRICE_MONTHLY]: 'vZSCz2zN', // Monthly Plan Discount - 35% off once
-            [process.env.STRIPE_PRICE_YEARLY]: 'n8MirGtZ', // Yearly Plan Discount - Fixed $70 off ($49.99 first year)
+            [process.env.STRIPE_PRICE_WEEKLY]: process.env.STRIPE_COUPON_WEEKLY,
+            [process.env.STRIPE_PRICE_MONTHLY]: process.env.STRIPE_COUPON_MONTHLY,
+            [process.env.STRIPE_PRICE_YEARLY]: process.env.STRIPE_COUPON_YEARLY,
         };
 
         const sessionConfig = {
